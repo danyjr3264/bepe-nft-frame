@@ -86,7 +86,9 @@ async function checkFollowStatus(userFid) {
     const response = await axios.get(`https://api.neynar.com/v2/farcaster/following?fid=${userFid}&limit=100`, {
       headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
     });
-    const isFollowing = response.data.following.some(follow => follow.target_fid === Number(process.env.OWNER_FID));
+    console.log('Follow response:', response.data); // Debugging
+    const followingList = response.data.following || [];
+    const isFollowing = followingList.some(follow => follow.target_fid === Number(process.env.OWNER_FID));
     console.log(`FID ${userFid} follows OWNER_FID ${process.env.OWNER_FID}:`, isFollowing);
     return isFollowing;
   } catch (error) {
@@ -98,20 +100,22 @@ async function checkFollowStatus(userFid) {
 // Fungsi untuk memeriksa apakah FID telah like dan repost cast tertentu
 async function checkLikeAndRepost(fid, castHash) {
   try {
-    const reactionsResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&limit=100`, {
+    const response = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&limit=100`, {
       headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
     });
-    const hasLiked = reactionsResponse.data.reactions.some(reaction => 
+    console.log('Reactions response:', response.data); // Debugging
+    const reactions = response.data.reactions || [];
+    const hasLiked = reactions.some(reaction => 
       reaction.reaction_type === 'like' && reaction.target_hash === castHash
     );
-    const hasReposted = reactionsResponse.data.reactions.some(reaction => 
+    const hasReposted = reactions.some(reaction => 
       reaction.reaction_type === 'recast' && reaction.target_hash === castHash
     );
     console.log(`FID ${fid} liked cast ${castHash}:`, hasLiked);
     console.log(`FID ${fid} reposted cast ${castHash}:`, hasReposted);
     return { hasLiked, hasReposted };
   } catch (error) {
-    console.error('Error checking like/repost:', error.message);
+    console.error('Error checking like/repost:', error.message, error.response?.data); // Log detail error
     return { hasLiked: false, hasReposted: false };
   }
 }
