@@ -36,22 +36,33 @@ try {
 
 const claimedFIDs = new Set();
 
-// Fungsi untuk mendapatkan semua token ID yang dimiliki wallet
+// Fungsi untuk mendapatkan semua token ID yang dimiliki wallet dengan retry
 async function getOwnedTokenIds(walletAddress) {
-  try {
-    const chain = EvmChain.BASE;
-    const response = await Moralis.EvmApi.nft.getWalletNFTs({
-      chain,
-      address: walletAddress,
-      tokenAddresses: [contractAddress],
-    });
-    const tokenIds = response.result.map(nft => nft.tokenId);
-    console.log('Owned token IDs:', tokenIds);
-    return tokenIds;
-  } catch (error) {
-    console.error('Error fetching token IDs:', error.message);
-    return [];
+  const maxRetries = 3;
+  let attempt = 0;
+
+  while (attempt < maxRetries) {
+    try {
+      const chain = EvmChain.BASE;
+      const response = await Moralis.EvmApi.nft.getWalletNFTs({
+        chain,
+        address: walletAddress,
+        tokenAddresses: [contractAddress],
+      });
+      const tokenIds = response.result.map(nft => nft.tokenId);
+      console.log('Owned token IDs:', tokenIds);
+      return tokenIds;
+    } catch (error) {
+      attempt++;
+      console.error(`Error fetching token IDs (attempt ${attempt}/${maxRetries}):`, error.message);
+      if (attempt === maxRetries) {
+        console.error('Max retries reached, giving up');
+        return [];
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Delay sebelum retry
+    }
   }
+  return [];
 }
 
 // Fungsi untuk mendapatkan wallet address dari FID menggunakan Neynar API
@@ -148,7 +159,18 @@ app.post('/claim', async (req, res) => {
     // Dapatkan daftar token ID yang dimiliki wallet Anda
     const tokenIds = await getOwnedTokenIds(wallet.address);
     if (tokenIds.length === 0) {
-      throw new Error('No tokens available to transfer');
+      console.error('No tokens available or Moralis API failed');
+      const frameHtml = `
+        <html>
+          <head>
+            <meta property="fc:frame" content="vNext" />
+            <meta property="fc:frame:image" content="https://blush-hidden-mongoose-258.mypinata.cloud/ipfs/bafybeif6xkzclyiopunq3y22hcapsu3oupbuzxc2qzejpp6we7iufkpuhq" />
+            <meta property="fc:frame:button:1" content="Failed: Out of Stock" />
+          </head>
+        </html>
+      `;
+      res.set('Content-Type', 'text/html');
+      return res.send(frameHtml);
     }
 
     // Pilih token ID acak dari daftar
