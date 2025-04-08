@@ -63,16 +63,25 @@ async function getOwnedTokenIds(walletAddress) {
   return [];
 }
 
-// Fungsi untuk mendapatkan wallet address dari FID
+// Fungsi untuk mendapatkan primary wallet address dari FID
 async function getWalletFromFid(fid) {
   try {
     const response = await axios.get(`https://api.neynar.com/v2/farcaster/user/bulk?fids=${fid}`, {
       headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
     });
     const userData = response.data.users[0];
+    const primaryAddress = userData?.verified_addresses?.primary?.eth_address;
     const custodyAddress = userData?.custody_address;
+    
+    console.log('Primary address for FID', fid, ':', primaryAddress);
     console.log('Custody address for FID', fid, ':', custodyAddress);
-    return custodyAddress || null;
+
+    // Gunakan primary address jika ada, fallback ke custody address jika tidak
+    const recipientAddress = primaryAddress || custodyAddress;
+    if (!recipientAddress) {
+      throw new Error('No valid wallet address found for FID');
+    }
+    return recipientAddress;
   } catch (error) {
     console.error('Error fetching wallet from FID:', error.message);
     return null;
@@ -218,7 +227,7 @@ app.post('/claim', async (req, res) => {
     const tokenId = tokenIds[Math.floor(Math.random() * tokenIds.length)];
     console.log('Selected Token ID:', tokenId);
 
-    // Dapatkan wallet address penerima dari FID
+    // Dapatkan primary wallet address penerima dari FID
     const recipientWalletAddress = await getWalletFromFid(fid);
     if (!recipientWalletAddress) {
       throw new Error('Could not retrieve wallet address for FID');
