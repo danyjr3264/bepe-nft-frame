@@ -1,8 +1,15 @@
 const express = require('express');
 const { ethers, JsonRpcProvider } = require('ethers');
+const Moralis = require('moralis').default;
+const { EvmChain } = require('@moralisweb3/common-evm-utils');
 const app = express();
 
 app.use(express.json());
+
+// Inisialisasi Moralis
+Moralis.start({
+  apiKey: process.env.MORALIS_API_KEY,
+});
 
 // Log environment variables
 console.log('BASE_RPC_URL:', process.env.BASE_RPC_URL);
@@ -12,18 +19,37 @@ let provider, wallet, contract;
 try {
   provider = new JsonRpcProvider(process.env.BASE_RPC_URL || 'https://mainnet.base.org');
   wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
-  const contractAddress = '0xddafccf625344039848feffc61939931f17b550a'; // Pastikan valid di Base
+  const contractAddress = '0xddafccf625344039848feffc61939931f17b550a'; // Konfirmasi kontrak Anda
   const contractABI = [
     "function transferFrom(address from, address to, uint256 tokenId) public",
     "function balanceOf(address owner) public view returns (uint256)"
   ];
   contract = new ethers.Contract(contractAddress, contractABI, wallet);
   console.log('Contract initialized successfully');
+  console.log('Wallet address (sender):', wallet.address);
 } catch (error) {
   console.error('Error initializing Ethereum:', error.message);
 }
 
 const claimedFIDs = new Set();
+
+// Fungsi untuk mendapatkan semua token ID yang dimiliki wallet
+async function getOwnedTokenIds(walletAddress, contractAddress) {
+  try {
+    const chain = EvmChain.BASE;
+    const response = await Moralis.EvmApi.nft.getWalletNFTs({
+      chain,
+      address: walletAddress,
+      tokenAddresses: [contractAddress],
+    });
+    const tokenIds = response.result.map(nft => nft.tokenId);
+    console.log('Owned token IDs:', tokenIds);
+    return tokenIds;
+  } catch (error) {
+    console.error('Error fetching token IDs:', error.message);
+    return [];
+  }
+}
 
 app.get('/', (req, res) => {
   const frameHtml = `
@@ -97,9 +123,22 @@ app.post('/claim', async (req, res) => {
   }
 
   try {
-    const walletAddress = untrustedData?.address || '0x...'; // Placeholder
-    console.log('Attempting transfer to:', walletAddress);
-    const tx = await contract.transferFrom(wallet.address, walletAddress, 1);
+    // Dapatkan daftar token ID yang dimiliki wallet Anda
+    const tokenIds = await getOwnedTokenIds(wallet.address, contractAddress);
+    if (tokenIds.length === 0) {
+      throw new Error('No tokens available to transfer');
+    }
+
+    // Pilih token ID acak dari daftar (atau logika lain sesuai kebutuhan)
+    const tokenId = tokenIds[Math.floor(Math.random() * tokenIds.length)];
+    console.log('Selected Token ID:', tokenId);
+
+    // Gunakan alamat tes untuk recipient (ganti dengan alamat Anda sendiri untuk tes)
+    const recipientWalletAddress = '0xYourTestWalletAddressHere'; // Ganti dengan alamat valid
+    console.log('Sender (your wallet):', wallet.address);
+    console.log('Recipient:', recipientWalletAddress);
+
+    const tx = await contract.transferFrom(wallet.address, recipientWalletAddress, tokenId);
     console.log('Transaction sent:', tx.hash);
     await tx.wait();
     console.log('Transaction confirmed');
