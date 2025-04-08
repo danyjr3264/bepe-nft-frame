@@ -33,8 +33,8 @@ app.get('/', (req, res) => {
         <meta property="fc:frame:image" content="https://blush-hidden-mongoose-258.mypinata.cloud/ipfs/bafybeifmntnodfu4zcfcbhrtmweobaqrxljlgp6f7u3hwfmg632aopgtpa" />
         <meta property="fc:frame:button:1" content="Claim BEPE NFTs" />
         <meta property="fc:frame:button:1:action" content="post" />
-        <meta property="fc:frame:button:1:target" content="claim" />
-        <meta property="fc:frame:post_url" content="claim" />
+        <meta property="fc:frame:button:1:target" content="https://bepe-nft-frame.vercel.app/claim" />
+        <meta property="fc:frame:post_url" content="https://bepe-nft-frame.vercel.app/claim" />
       </head>
       <body>
         <p>BEPE NFT Claim Frame</p>
