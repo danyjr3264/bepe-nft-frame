@@ -1,7 +1,20 @@
 const express = require('express');
+const { ethers } = require('ethers');
 const app = express();
 
 app.use(express.json());
+
+// Konfigurasi Ethereum untuk jaringan Base
+const provider = new ethers.providers.JsonRpcProvider(process.env.BASE_RPC_URL || 'https://mainnet.base.org');
+const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+const contractAddress = '0xddafccf625344039848feffc61939931f17b550a'; // Pastikan ini kontrak di Base
+const contractABI = [
+  "function transferFrom(address from, address to, uint256 tokenId) public",
+  "function balanceOf(address owner) public view returns (uint256)"
+];
+const contract = new ethers.Contract(contractAddress, contractABI, wallet);
+
+const claimedFIDs = new Set();
 
 app.get('/', (req, res) => {
   const frameHtml = `
@@ -23,18 +36,69 @@ app.get('/', (req, res) => {
   res.send(frameHtml);
 });
 
-app.post('/claim', (req, res) => {
-  const frameHtml = `
-    <html>
-      <head>
-        <meta property="fc:frame" content="vNext" />
-        <meta property="fc:frame:image" content="https://blush-hidden-mongoose-258.mypinata.cloud/ipfs/bafybeiazfcqzxodyvukl444pdno5lav2wimp4dhp4cpupohwznywjlizue" />
-        <meta property="fc:frame:button:1" content="Claimed (Test)" />
-      </head>
-    </html>
-  `;
-  res.set('Content-Type', 'text/html');
-  res.send(frameHtml);
+app.post('/claim', async (req, res) => {
+  const { untrustedData } = req.body;
+  const fid = untrustedData?.fid;
+
+  if (!fid) {
+    const frameHtml = `
+      <html>
+        <head>
+          <meta property="fc:frame" content="vNext" />
+          <meta property="fc:frame:image" content="https://blush-hidden-mongoose-258.mypinata.cloud/ipfs/bafybeif6xkzclyiopunq3y22hcapsu3oupbuzxc2qzejpp6we7iufkpuhq" />
+          <meta property="fc:frame:button:1" content="Failed: No FID" />
+        </head>
+      </html>
+    `;
+    res.set('Content-Type', 'text/html');
+    return res.send(frameHtml);
+  }
+
+  if (claimedFIDs.has(fid)) {
+    const frameHtml = `
+      <html>
+        <head>
+          <meta property="fc:frame" content="vNext" />
+          <meta property="fc:frame:image" content="https://blush-hidden-mongoose-258.mypinata.cloud/ipfs/bafybeig2xmgzhagqqkaku6pmeowbpsglesn4kjoutcq3q65lxcenoy32ya" />
+          <meta property="fc:frame:button:1" content="Your FID has been Claimed" />
+        </head>
+      </html>
+    `;
+    res.set('Content-Type', 'text/html');
+    return res.send(frameHtml);
+  }
+
+  try {
+    const walletAddress = untrustedData?.address || '0x...'; // Ganti dengan logika untuk wallet
+    const tx = await contract.transferFrom(wallet.address, walletAddress, 1); // Sesuaikan tokenId
+    await tx.wait();
+
+    claimedFIDs.add(fid);
+    const frameHtml = `
+      <html>
+        <head>
+          <meta property="fc:frame" content="vNext" />
+          <meta property="fc:frame:image" content="https://blush-hidden-mongoose-258.mypinata.cloud/ipfs/bafybeiazfcqzxodyvukl444pdno5lav2wimp4dhp4cpupohwznywjlizue" />
+          <meta property="fc:frame:button:1" content="Claimed" />
+        </head>
+      </html>
+    `;
+    res.set('Content-Type', 'text/html');
+    res.send(frameHtml);
+  } catch (error) {
+    console.error(error);
+    const frameHtml = `
+      <html>
+        <head>
+          <meta property="fc:frame" content="vNext" />
+          <meta property="fc:frame:image" content="https://blush-hidden-mongoose-258.mypinata.cloud/ipfs/bafybeif6xkzclyiopunq3y22hcapsu3oupbuzxc2qzejpp6we7iufkpuhq" />
+          <meta property="fc:frame:button:1" content="Failed" />
+        </head>
+      </html>
+    `;
+    res.set('Content-Type', 'text/html');
+    res.send(frameHtml);
+  }
 });
 
 module.exports = app;
