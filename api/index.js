@@ -1,10 +1,10 @@
 const express = require('express');
-const { ethers, JsonRpcProvider } = require('ethers'); // Impor JsonRpcProvider eksplisit
+const { ethers, JsonRpcProvider } = require('ethers');
 const app = express();
 
 app.use(express.json());
 
-// Log untuk debugging
+// Log environment variables
 console.log('BASE_RPC_URL:', process.env.BASE_RPC_URL);
 console.log('PRIVATE_KEY:', process.env.PRIVATE_KEY ? 'Set' : 'Not set');
 
@@ -18,6 +18,7 @@ try {
     "function balanceOf(address owner) public view returns (uint256)"
   ];
   contract = new ethers.Contract(contractAddress, contractABI, wallet);
+  console.log('Contract initialized successfully');
 } catch (error) {
   console.error('Error initializing Ethereum:', error.message);
 }
@@ -32,8 +33,8 @@ app.get('/', (req, res) => {
         <meta property="fc:frame:image" content="https://blush-hidden-mongoose-258.mypinata.cloud/ipfs/bafybeifmntnodfu4zcfcbhrtmweobaqrxljlgp6f7u3hwfmg632aopgtpa" />
         <meta property="fc:frame:button:1" content="Claim BEPE NFTs" />
         <meta property="fc:frame:button:1:action" content="post" />
-        <meta property="fc:frame:button:1:target" content="/claim" />
-        <meta property="fc:frame:post_url" content="/claim" />
+        <meta property="fc:frame:button:1:target" content="claim" />
+        <meta property="fc:frame:post_url" content="claim" />
       </head>
       <body>
         <p>BEPE NFT Claim Frame</p>
@@ -45,7 +46,10 @@ app.get('/', (req, res) => {
 });
 
 app.post('/claim', async (req, res) => {
+  console.log('Request body:', req.body);
+
   if (!contract) {
+    console.error('Contract not initialized');
     const frameHtml = `
       <html>
         <head>
@@ -60,8 +64,10 @@ app.post('/claim', async (req, res) => {
 
   const { untrustedData } = req.body;
   const fid = untrustedData?.fid;
+  console.log('FID:', fid);
 
   if (!fid) {
+    console.error('No FID provided');
     const frameHtml = `
       <html>
         <head>
@@ -76,6 +82,7 @@ app.post('/claim', async (req, res) => {
   }
 
   if (claimedFIDs.has(fid)) {
+    console.log('FID already claimed:', fid);
     const frameHtml = `
       <html>
         <head>
@@ -91,8 +98,11 @@ app.post('/claim', async (req, res) => {
 
   try {
     const walletAddress = untrustedData?.address || '0x...'; // Placeholder
+    console.log('Attempting transfer to:', walletAddress);
     const tx = await contract.transferFrom(wallet.address, walletAddress, 1);
+    console.log('Transaction sent:', tx.hash);
     await tx.wait();
+    console.log('Transaction confirmed');
 
     claimedFIDs.add(fid);
     const frameHtml = `
