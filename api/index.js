@@ -102,30 +102,31 @@ async function checkLikeAndRepost(fid, castHash) {
   try {
     let hasLiked = false;
     let hasReposted = false;
-    let cursor = null;
+    let likeCursor = null;
+    let repostCursor = null;
+    const targetHashLower = castHash.toLowerCase(); // Normalisasi hash
 
     // Cek likes dengan pagination
     do {
-      const likeResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&type=like&limit=100${cursor ? `&cursor=${cursor}` : ''}`, {
+      const likeResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&type=like&limit=100${likeCursor ? `&cursor=${likeCursor}` : ''}`, {
         headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
       });
-      const likeHashes = likeResponse.data.reactions.map(reaction => reaction.target_hash);
-      console.log(`Like hashes for FID ${fid} (cursor: ${cursor || 'none'}):`, likeHashes);
-      hasLiked = hasLiked || likeHashes.includes(castHash);
-      cursor = likeResponse.data.next?.cursor || null;
-    } while (cursor && !hasLiked);
+      const likeHashes = likeResponse.data.reactions.map(reaction => reaction.target_hash.toLowerCase());
+      console.log(`Like hashes for FID ${fid} (cursor: ${likeCursor || 'none'}):`, likeHashes);
+      hasLiked = hasLiked || likeHashes.includes(targetHashLower);
+      likeCursor = likeResponse.data.next?.cursor || null;
+    } while (likeCursor && !hasLiked);
 
-    // Reset cursor untuk cek reposts
-    cursor = null;
+    // Cek reposts dengan pagination
     do {
-      const repostResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&type=recast&limit=100${cursor ? `&cursor=${cursor}` : ''}`, {
+      const repostResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&type=recast&limit=100${repostCursor ? `&cursor=${repostCursor}` : ''}`, {
         headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
       });
-      const repostHashes = repostResponse.data.reactions.map(reaction => reaction.target_hash);
-      console.log(`Repost hashes for FID ${fid} (cursor: ${cursor || 'none'}):`, repostHashes);
-      hasReposted = hasReposted || repostHashes.includes(castHash);
-      cursor = repostResponse.data.next?.cursor || null;
-    } while (cursor && !hasReposted);
+      const repostHashes = repostResponse.data.reactions.map(reaction => reaction.target_hash.toLowerCase());
+      console.log(`Repost hashes for FID ${fid} (cursor: ${repostCursor || 'none'}):`, repostHashes);
+      hasReposted = hasReposted || repostHashes.includes(targetHashLower);
+      repostCursor = repostResponse.data.next?.cursor || null;
+    } while (repostCursor && !hasReposted);
 
     console.log(`FID ${fid} liked cast ${castHash}:`, hasLiked);
     console.log(`FID ${fid} reposted cast ${castHash}:`, hasReposted);
