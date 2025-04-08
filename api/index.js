@@ -83,7 +83,7 @@ async function getWalletFromFid(fid) {
 // Fungsi untuk memeriksa apakah FID mengikuti OWNER_FID
 async function checkFollowStatus(userFid) {
   try {
-    const response = await axios.get(`https://api.neynar.com/v2/farcaster/following?fid=${userFid}&limit=100`, {
+    const response = await axios.get(`https://api.neynar.com/v2/farcaster/following?fid=${userFid}&limit=1000`, {
       headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
     });
     console.log('Follow response:', response.data);
@@ -101,18 +101,20 @@ async function checkFollowStatus(userFid) {
 async function checkLikeAndRepost(fid, castHash) {
   try {
     // Cek likes
-    const likeResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&type=like&limit=100`, {
+    const likeResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&type=like&limit=1000`, {
       headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
     });
-    console.log('Like response:', likeResponse.data);
-    const hasLiked = likeResponse.data.reactions.some(reaction => reaction.target_hash === castHash);
+    const likeHashes = likeResponse.data.reactions.map(reaction => reaction.target_hash);
+    console.log(`Like hashes for FID ${fid}:`, likeHashes);
+    const hasLiked = likeHashes.includes(castHash);
 
     // Cek reposts
-    const repostResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&type=recast&limit=100`, {
+    const repostResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&type=recast&limit=1000`, {
       headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
     });
-    console.log('Repost response:', repostResponse.data);
-    const hasReposted = repostResponse.data.reactions.some(reaction => reaction.target_hash === castHash);
+    const repostHashes = repostResponse.data.reactions.map(reaction => reaction.target_hash);
+    console.log(`Repost hashes for FID ${fid}:`, repostHashes);
+    const hasReposted = repostHashes.includes(castHash);
 
     console.log(`FID ${fid} liked cast ${castHash}:`, hasLiked);
     console.log(`FID ${fid} reposted cast ${castHash}:`, hasReposted);
