@@ -97,24 +97,35 @@ async function checkFollowStatus(userFid) {
   }
 }
 
-// Fungsi untuk memeriksa apakah FID telah like dan repost cast tertentu
+// Fungsi untuk memeriksa apakah FID telah like dan repost cast tertentu dengan pagination
 async function checkLikeAndRepost(fid, castHash) {
   try {
-    // Cek likes
-    const likeResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&type=like&limit=100`, {
-      headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
-    });
-    const likeHashes = likeResponse.data.reactions.map(reaction => reaction.target_hash);
-    console.log(`Like hashes for FID ${fid}:`, likeHashes);
-    const hasLiked = likeHashes.includes(castHash);
+    let hasLiked = false;
+    let hasReposted = false;
+    let cursor = null;
 
-    // Cek reposts
-    const repostResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&type=recast&limit=100`, {
-      headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
-    });
-    const repostHashes = repostResponse.data.reactions.map(reaction => reaction.target_hash);
-    console.log(`Repost hashes for FID ${fid}:`, repostHashes);
-    const hasReposted = repostHashes.includes(castHash);
+    // Cek likes dengan pagination
+    do {
+      const likeResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&type=like&limit=100${cursor ? `&cursor=${cursor}` : ''}`, {
+        headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
+      });
+      const likeHashes = likeResponse.data.reactions.map(reaction => reaction.target_hash);
+      console.log(`Like hashes for FID ${fid} (cursor: ${cursor || 'none'}):`, likeHashes);
+      hasLiked = hasLiked || likeHashes.includes(castHash);
+      cursor = likeResponse.data.next?.cursor || null;
+    } while (cursor && !hasLiked);
+
+    // Reset cursor untuk cek reposts
+    cursor = null;
+    do {
+      const repostResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&type=recast&limit=100${cursor ? `&cursor=${cursor}` : ''}`, {
+        headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
+      });
+      const repostHashes = repostResponse.data.reactions.map(reaction => reaction.target_hash);
+      console.log(`Repost hashes for FID ${fid} (cursor: ${cursor || 'none'}):`, repostHashes);
+      hasReposted = hasReposted || repostHashes.includes(castHash);
+      cursor = repostResponse.data.next?.cursor || null;
+    } while (cursor && !hasReposted);
 
     console.log(`FID ${fid} liked cast ${castHash}:`, hasLiked);
     console.log(`FID ${fid} reposted cast ${castHash}:`, hasReposted);
