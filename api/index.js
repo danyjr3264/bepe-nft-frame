@@ -15,11 +15,13 @@ Moralis.start({
 console.log('BASE_RPC_URL:', process.env.BASE_RPC_URL);
 console.log('PRIVATE_KEY:', process.env.PRIVATE_KEY ? 'Set' : 'Not set');
 
+// Definisikan contractAddress di scope global
+const contractAddress = '0xddafccf625344039848feffc61939931f17b550a'; // Konfirmasi ini kontrak Anda di Base
+
 let provider, wallet, contract;
 try {
   provider = new JsonRpcProvider(process.env.BASE_RPC_URL || 'https://mainnet.base.org');
   wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
-  const contractAddress = '0xddafccf625344039848feffc61939931f17b550a'; // Konfirmasi kontrak Anda
   const contractABI = [
     "function transferFrom(address from, address to, uint256 tokenId) public",
     "function balanceOf(address owner) public view returns (uint256)"
@@ -34,7 +36,7 @@ try {
 const claimedFIDs = new Set();
 
 // Fungsi untuk mendapatkan semua token ID yang dimiliki wallet
-async function getOwnedTokenIds(walletAddress, contractAddress) {
+async function getOwnedTokenIds(walletAddress) { // Hapus parameter contractAddress karena sudah global
   try {
     const chain = EvmChain.BASE;
     const response = await Moralis.EvmApi.nft.getWalletNFTs({
@@ -124,17 +126,17 @@ app.post('/claim', async (req, res) => {
 
   try {
     // Dapatkan daftar token ID yang dimiliki wallet Anda
-    const tokenIds = await getOwnedTokenIds(wallet.address, contractAddress);
+    const tokenIds = await getOwnedTokenIds(wallet.address);
     if (tokenIds.length === 0) {
       throw new Error('No tokens available to transfer');
     }
 
-    // Pilih token ID acak dari daftar (atau logika lain sesuai kebutuhan)
+    // Pilih token ID acak dari daftar
     const tokenId = tokenIds[Math.floor(Math.random() * tokenIds.length)];
     console.log('Selected Token ID:', tokenId);
 
     // Gunakan alamat tes untuk recipient (ganti dengan alamat Anda sendiri untuk tes)
-    const recipientWalletAddress = '0xYourTestWalletAddressHere'; // Ganti dengan alamat valid
+    const recipientWalletAddress = '0xD6162E0064aC2A5c74d3d56B4fb1eBB4D6B4840c'; // Ganti dengan alamat valid
     console.log('Sender (your wallet):', wallet.address);
     console.log('Recipient:', recipientWalletAddress);
 
