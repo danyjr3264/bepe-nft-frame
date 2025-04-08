@@ -2,6 +2,7 @@ const express = require('express');
 const { ethers, JsonRpcProvider } = require('ethers');
 const Moralis = require('moralis').default;
 const { EvmChain } = require('@moralisweb3/common-evm-utils');
+const axios = require('axios');
 const app = express();
 
 app.use(express.json());
@@ -14,9 +15,9 @@ Moralis.start({
 // Log environment variables
 console.log('BASE_RPC_URL:', process.env.BASE_RPC_URL);
 console.log('PRIVATE_KEY:', process.env.PRIVATE_KEY ? 'Set' : 'Not set');
+console.log('NEYNAR_API_KEY:', process.env.NEYNAR_API_KEY ? 'Set' : 'Not set');
 
-// Definisikan contractAddress di scope global
-const contractAddress = '0xddafccf625344039848feffc61939931f17b550a'; // Konfirmasi ini kontrak Anda di Base
+const contractAddress = '0xddafccf625344039848feffc61939931f17b550a'; // Konfirmasi kontrak Anda
 
 let provider, wallet, contract;
 try {
@@ -36,7 +37,7 @@ try {
 const claimedFIDs = new Set();
 
 // Fungsi untuk mendapatkan semua token ID yang dimiliki wallet
-async function getOwnedTokenIds(walletAddress) { // Hapus parameter contractAddress karena sudah global
+async function getOwnedTokenIds(walletAddress) {
   try {
     const chain = EvmChain.BASE;
     const response = await Moralis.EvmApi.nft.getWalletNFTs({
@@ -50,6 +51,25 @@ async function getOwnedTokenIds(walletAddress) { // Hapus parameter contractAddr
   } catch (error) {
     console.error('Error fetching token IDs:', error.message);
     return [];
+  }
+}
+
+// Fungsi untuk mendapatkan wallet address dari FID menggunakan Neynar API
+async function getWalletFromFid(fid) {
+  try {
+    const response = await axios.get(`https://api.neynar.com/v2/farcaster/user/bulk?fids=${fid}`, {
+      headers: {
+        'accept': 'application/json',
+        'api_key': process.env.NEYNAR_API_KEY,
+      },
+    });
+    const userData = response.data.users[0];
+    const custodyAddress = userData?.custody_address;
+    console.log('Custody address for FID', fid, ':', custodyAddress);
+    return custodyAddress || null;
+  } catch (error) {
+    console.error('Error fetching wallet from FID:', error.message);
+    return null;
   }
 }
 
@@ -135,8 +155,12 @@ app.post('/claim', async (req, res) => {
     const tokenId = tokenIds[Math.floor(Math.random() * tokenIds.length)];
     console.log('Selected Token ID:', tokenId);
 
-    // Gunakan alamat tes untuk recipient (ganti dengan alamat Anda sendiri untuk tes)
-    const recipientWalletAddress = '0xD6162E0064aC2A5c74d3d56B4fb1eBB4D6B4840c'; // Ganti dengan alamat valid
+    // Dapatkan wallet address penerima dari FID
+    const recipientWalletAddress = await getWalletFromFid(fid);
+    if (!recipientWalletAddress) {
+      throw new Error('Could not retrieve wallet address for FID');
+    }
+
     console.log('Sender (your wallet):', wallet.address);
     console.log('Recipient:', recipientWalletAddress);
 
