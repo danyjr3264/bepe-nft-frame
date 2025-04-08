@@ -87,8 +87,8 @@ async function checkFollowStatus(userFid) {
       headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
     });
     console.log('Follow response:', response.data);
-    const followingList = response.data.following || [];
-    const isFollowing = followingList.some(follow => follow.target_fid === Number(process.env.OWNER_FID));
+    const followingList = response.data.users || response.data.following || [];
+    const isFollowing = followingList.some(follow => follow.user?.fid === Number(process.env.OWNER_FID) || follow.target_fid === Number(process.env.OWNER_FID));
     console.log(`FID ${userFid} follows OWNER_FID ${process.env.OWNER_FID}:`, isFollowing);
     return isFollowing;
   } catch (error) {
@@ -104,14 +104,15 @@ async function checkLikeAndRepost(fid, castHash) {
     let hasReposted = false;
     let likeCursor = null;
     let repostCursor = null;
-    const targetHashLower = castHash.toLowerCase(); // Normalisasi hash
+    const targetHashLower = castHash.toLowerCase();
 
     // Cek likes dengan pagination
     do {
       const likeResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&type=like&limit=100${likeCursor ? `&cursor=${likeCursor}` : ''}`, {
         headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
       });
-      const likeHashes = likeResponse.data.reactions.map(reaction => reaction.target_hash.toLowerCase());
+      console.log('Like response:', likeResponse.data);
+      const likeHashes = (likeResponse.data.reactions || []).map(reaction => reaction.target_hash?.toLowerCase() || '');
       console.log(`Like hashes for FID ${fid} (cursor: ${likeCursor || 'none'}):`, likeHashes);
       hasLiked = hasLiked || likeHashes.includes(targetHashLower);
       likeCursor = likeResponse.data.next?.cursor || null;
@@ -122,7 +123,8 @@ async function checkLikeAndRepost(fid, castHash) {
       const repostResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&type=recast&limit=100${repostCursor ? `&cursor=${repostCursor}` : ''}`, {
         headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
       });
-      const repostHashes = repostResponse.data.reactions.map(reaction => reaction.target_hash.toLowerCase());
+      console.log('Repost response:', repostResponse.data);
+      const repostHashes = (repostResponse.data.reactions || []).map(reaction => reaction.target_hash?.toLowerCase() || '');
       console.log(`Repost hashes for FID ${fid} (cursor: ${repostCursor || 'none'}):`, repostHashes);
       hasReposted = hasReposted || repostHashes.includes(targetHashLower);
       repostCursor = repostResponse.data.next?.cursor || null;
