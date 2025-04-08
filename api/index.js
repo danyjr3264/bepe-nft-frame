@@ -19,7 +19,7 @@ console.log('NEYNAR_API_KEY:', process.env.NEYNAR_API_KEY ? 'Set' : 'Not set');
 console.log('OWNER_FID:', process.env.OWNER_FID);
 console.log('REQUIRED_CAST_HASH:', process.env.REQUIRED_CAST_HASH);
 
-const contractAddress = '0xddafccf625344039848feffc61939931f17b550a'; // Konfirmasi kontrak Anda
+const contractAddress = '0xddafccf625344039848feffc61939931f17b550a';
 
 let provider, wallet, contract;
 try {
@@ -80,15 +80,24 @@ async function getWalletFromFid(fid) {
   }
 }
 
-// Fungsi untuk memeriksa apakah FID mengikuti OWNER_FID
+// Fungsi untuk memeriksa apakah FID mengikuti OWNER_FID dengan pagination
 async function checkFollowStatus(userFid) {
   try {
-    const response = await axios.get(`https://api.neynar.com/v2/farcaster/following?fid=${userFid}&limit=100`, {
-      headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
-    });
-    console.log('Follow response:', response.data);
-    const followingList = response.data.users || response.data.following || [];
-    const isFollowing = followingList.some(follow => follow.user?.fid === Number(process.env.OWNER_FID) || follow.target_fid === Number(process.env.OWNER_FID));
+    let isFollowing = false;
+    let cursor = null;
+
+    do {
+      const response = await axios.get(`https://api.neynar.com/v2/farcaster/following?fid=${userFid}&limit=100${cursor ? `&cursor=${cursor}` : ''}`, {
+        headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
+      });
+      console.log('Follow response:', response.data);
+      const followingList = response.data.users || response.data.following || [];
+      isFollowing = isFollowing || followingList.some(follow => 
+        (follow.user?.fid === Number(process.env.OWNER_FID)) || (follow.target_fid === Number(process.env.OWNER_FID))
+      );
+      cursor = response.data.next?.cursor || null;
+    } while (cursor && !isFollowing);
+
     console.log(`FID ${userFid} follows OWNER_FID ${process.env.OWNER_FID}:`, isFollowing);
     return isFollowing;
   } catch (error) {
