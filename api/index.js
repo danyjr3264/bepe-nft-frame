@@ -16,6 +16,8 @@ Moralis.start({
 console.log('BASE_RPC_URL:', process.env.BASE_RPC_URL);
 console.log('PRIVATE_KEY:', process.env.PRIVATE_KEY ? 'Set' : 'Not set');
 console.log('NEYNAR_API_KEY:', process.env.NEYNAR_API_KEY ? 'Set' : 'Not set');
+console.log('OWNER_FID:', process.env.OWNER_FID);
+console.log('REQUIRED_CAST_HASH:', process.env.REQUIRED_CAST_HASH);
 
 const contractAddress = '0xddafccf625344039848feffc61939931f17b550a'; // Konfirmasi kontrak Anda
 
@@ -55,24 +57,18 @@ async function getOwnedTokenIds(walletAddress) {
     } catch (error) {
       attempt++;
       console.error(`Error fetching token IDs (attempt ${attempt}/${maxRetries}):`, error.message);
-      if (attempt === maxRetries) {
-        console.error('Max retries reached, giving up');
-        return [];
-      }
-      await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Delay sebelum retry
+      if (attempt === maxRetries) return [];
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
     }
   }
   return [];
 }
 
-// Fungsi untuk mendapatkan wallet address dari FID menggunakan Neynar API
+// Fungsi untuk mendapatkan wallet address dari FID
 async function getWalletFromFid(fid) {
   try {
     const response = await axios.get(`https://api.neynar.com/v2/farcaster/user/bulk?fids=${fid}`, {
-      headers: {
-        'accept': 'application/json',
-        'api_key': process.env.NEYNAR_API_KEY,
-      },
+      headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
     });
     const userData = response.data.users[0];
     const custodyAddress = userData?.custody_address;
@@ -81,6 +77,42 @@ async function getWalletFromFid(fid) {
   } catch (error) {
     console.error('Error fetching wallet from FID:', error.message);
     return null;
+  }
+}
+
+// Fungsi untuk memeriksa apakah FID mengikuti OWNER_FID
+async function checkFollowStatus(userFid) {
+  try {
+    const response = await axios.get(`https://api.neynar.com/v1/farcaster/follows?fid=${userFid}&viewerFid=${process.env.OWNER_FID}`, {
+      headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
+    });
+    const isFollowing = response.data.is_following;
+    console.log(`FID ${userFid} follows OWNER_FID ${process.env.OWNER_FID}:`, isFollowing);
+    return isFollowing;
+  } catch (error) {
+    console.error('Error checking follow status:', error.message);
+    return false;
+  }
+}
+
+// Fungsi untuk memeriksa apakah FID telah like dan repost cast tertentu
+async function checkLikeAndRepost(fid, castHash) {
+  try {
+    const reactionsResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&limit=100`, {
+      headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
+    });
+    const hasLiked = reactionsResponse.data.reactions.some(reaction => 
+      reaction.reaction_type === 'like' && reaction.target_hash === castHash
+    );
+    const hasReposted = reactionsResponse.data.reactions.some(reaction => 
+      reaction.reaction_type === 'recast' && reaction.target_hash === castHash
+    );
+    console.log(`FID ${fid} liked cast ${castHash}:`, hasLiked);
+    console.log(`FID ${fid} reposted cast ${castHash}:`, hasReposted);
+    return { hasLiked, hasReposted };
+  } catch (error) {
+    console.error('Error checking like/repost:', error.message);
+    return { hasLiked: false, hasReposted: false };
   }
 }
 
@@ -156,10 +188,36 @@ app.post('/claim', async (req, res) => {
   }
 
   try {
+    // Cek persyaratan Warpcast
+    const isFollowing = await checkFollowStatus(fid);
+    const { hasLiked, hasReposted } = await checkLikeAndRepost(fid, process.env.REQUIRED_CAST_HASH);
+
+    if (!isFollowing || !hasLiked || !hasReposted) {
+      let message = 'Please ';
+      if (!isFollowing) message += 'follow me, ';
+      if (!hasLiked) message += 'like, ';
+      if (!hasReposted) message += 'repost ';
+      message += 'my post first!';
+
+      const frameHtml = `
+        <html>
+          <head>
+            <meta property="fc:frame" content="vNext" />
+            <meta property="fc:frame:image" content="https://blush-hidden-mongoose-258.mypinata.cloud/ipfs/bafybeicwokv4vlo52rtj4mffjrh3lkjjlccu5jp3rc6gvslzbbshjxkzoi" />
+            <meta property="fc:frame:button:1" content="Try Again" />
+            <meta property="fc:frame:button:1:action" content="post" />
+            <meta property="fc:frame:button:1:target" content="https://bepe-nft-frame.vercel.app/claim" />
+            <meta property="fc:frame:post_url" content="https://bepe-nft-frame.vercel.app/claim" />
+          </head>
+        </html>
+      `;
+      res.set('Content-Type', 'text/html');
+      return res.send(frameHtml);
+    }
+
     // Dapatkan daftar token ID yang dimiliki wallet Anda
     const tokenIds = await getOwnedTokenIds(wallet.address);
     if (tokenIds.length === 0) {
-      console.error('No tokens available or Moralis API failed');
       const frameHtml = `
         <html>
           <head>
