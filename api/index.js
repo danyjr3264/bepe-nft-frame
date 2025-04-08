@@ -83,10 +83,10 @@ async function getWalletFromFid(fid) {
 // Fungsi untuk memeriksa apakah FID mengikuti OWNER_FID
 async function checkFollowStatus(userFid) {
   try {
-    const response = await axios.get(`https://api.neynar.com/v1/farcaster/follows?fid=${userFid}&viewerFid=${process.env.OWNER_FID}`, {
+    const response = await axios.get(`https://api.neynar.com/v2/farcaster/following?fid=${userFid}&limit=100`, {
       headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
     });
-    const isFollowing = response.data.is_following;
+    const isFollowing = response.data.following.some(follow => follow.target_fid === Number(process.env.OWNER_FID));
     console.log(`FID ${userFid} follows OWNER_FID ${process.env.OWNER_FID}:`, isFollowing);
     return isFollowing;
   } catch (error) {
