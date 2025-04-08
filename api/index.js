@@ -17,7 +17,6 @@ console.log('BASE_RPC_URL:', process.env.BASE_RPC_URL);
 console.log('PRIVATE_KEY:', process.env.PRIVATE_KEY ? 'Set' : 'Not set');
 console.log('NEYNAR_API_KEY:', process.env.NEYNAR_API_KEY ? 'Set' : 'Not set');
 console.log('OWNER_FID:', process.env.OWNER_FID);
-console.log('REQUIRED_CAST_HASH:', process.env.REQUIRED_CAST_HASH);
 
 const contractAddress = '0xddafccf625344039848feffc61939931f17b550a';
 
@@ -96,6 +95,7 @@ async function checkFollowStatus(userFid) {
         (follow.user?.fid === Number(process.env.OWNER_FID)) || (follow.target_fid === Number(process.env.OWNER_FID))
       );
       cursor = response.data.next?.cursor || null;
+      console.log(`Checked page with cursor ${cursor || 'none'}, isFollowing: ${isFollowing}`);
     } while (cursor && !isFollowing);
 
     console.log(`FID ${userFid} follows OWNER_FID ${process.env.OWNER_FID}:`, isFollowing);
@@ -103,48 +103,6 @@ async function checkFollowStatus(userFid) {
   } catch (error) {
     console.error('Error checking follow status:', error.message, error.response?.data);
     return false;
-  }
-}
-
-// Fungsi untuk memeriksa apakah FID telah like dan repost cast tertentu dengan pagination
-async function checkLikeAndRepost(fid, castHash) {
-  try {
-    let hasLiked = false;
-    let hasReposted = false;
-    let likeCursor = null;
-    let repostCursor = null;
-    const targetHashLower = castHash.toLowerCase();
-
-    // Cek likes dengan pagination
-    do {
-      const likeResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&type=like&limit=100${likeCursor ? `&cursor=${likeCursor}` : ''}`, {
-        headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
-      });
-      console.log('Like response:', likeResponse.data);
-      const likeHashes = (likeResponse.data.reactions || []).map(reaction => reaction.target_hash?.toLowerCase() || '');
-      console.log(`Like hashes for FID ${fid} (cursor: ${likeCursor || 'none'}):`, likeHashes);
-      hasLiked = hasLiked || likeHashes.includes(targetHashLower);
-      likeCursor = likeResponse.data.next?.cursor || null;
-    } while (likeCursor && !hasLiked);
-
-    // Cek reposts dengan pagination
-    do {
-      const repostResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&type=recast&limit=100${repostCursor ? `&cursor=${repostCursor}` : ''}`, {
-        headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
-      });
-      console.log('Repost response:', repostResponse.data);
-      const repostHashes = (repostResponse.data.reactions || []).map(reaction => reaction.target_hash?.toLowerCase() || '');
-      console.log(`Repost hashes for FID ${fid} (cursor: ${repostCursor || 'none'}):`, repostHashes);
-      hasReposted = hasReposted || repostHashes.includes(targetHashLower);
-      repostCursor = repostResponse.data.next?.cursor || null;
-    } while (repostCursor && !hasReposted);
-
-    console.log(`FID ${fid} liked cast ${castHash}:`, hasLiked);
-    console.log(`FID ${fid} reposted cast ${castHash}:`, hasReposted);
-    return { hasLiked, hasReposted };
-  } catch (error) {
-    console.error('Error checking like/repost:', error.message, error.response?.data);
-    return { hasLiked: false, hasReposted: false };
   }
 }
 
@@ -220,17 +178,10 @@ app.post('/claim', async (req, res) => {
   }
 
   try {
-    // Cek persyaratan Warpcast
+    // Cek syarat Warpcast: hanya follow
     const isFollowing = await checkFollowStatus(fid);
-    const { hasLiked, hasReposted } = await checkLikeAndRepost(fid, process.env.REQUIRED_CAST_HASH);
 
-    if (!isFollowing || !hasLiked || !hasReposted) {
-      let message = 'Please ';
-      if (!isFollowing) message += 'follow me, ';
-      if (!hasLiked) message += 'like, ';
-      if (!hasReposted) message += 'repost ';
-      message += 'my post first!';
-
+    if (!isFollowing) {
       const frameHtml = `
         <html>
           <head>
