@@ -83,7 +83,7 @@ async function getWalletFromFid(fid) {
 // Fungsi untuk memeriksa apakah FID mengikuti OWNER_FID
 async function checkFollowStatus(userFid) {
   try {
-    const response = await axios.get(`https://api.neynar.com/v2/farcaster/following?fid=${userFid}&limit=1000`, {
+    const response = await axios.get(`https://api.neynar.com/v2/farcaster/following?fid=${userFid}&limit=100`, {
       headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
     });
     console.log('Follow response:', response.data);
@@ -92,7 +92,7 @@ async function checkFollowStatus(userFid) {
     console.log(`FID ${userFid} follows OWNER_FID ${process.env.OWNER_FID}:`, isFollowing);
     return isFollowing;
   } catch (error) {
-    console.error('Error checking follow status:', error.message);
+    console.error('Error checking follow status:', error.message, error.response?.data);
     return false;
   }
 }
@@ -101,7 +101,7 @@ async function checkFollowStatus(userFid) {
 async function checkLikeAndRepost(fid, castHash) {
   try {
     // Cek likes
-    const likeResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&type=like&limit=1000`, {
+    const likeResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&type=like&limit=100`, {
       headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
     });
     const likeHashes = likeResponse.data.reactions.map(reaction => reaction.target_hash);
@@ -109,7 +109,7 @@ async function checkLikeAndRepost(fid, castHash) {
     const hasLiked = likeHashes.includes(castHash);
 
     // Cek reposts
-    const repostResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&type=recast&limit=1000`, {
+    const repostResponse = await axios.get(`https://api.neynar.com/v2/farcaster/reactions/user?fid=${fid}&type=recast&limit=100`, {
       headers: { 'accept': 'application/json', 'api_key': process.env.NEYNAR_API_KEY },
     });
     const repostHashes = repostResponse.data.reactions.map(reaction => reaction.target_hash);
