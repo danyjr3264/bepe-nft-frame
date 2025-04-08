@@ -1,18 +1,26 @@
 const express = require('express');
-const { ethers } = require('ethers');
+const { ethers, JsonRpcProvider } = require('ethers'); // Impor JsonRpcProvider eksplisit
 const app = express();
 
 app.use(express.json());
 
-// Konfigurasi Ethereum untuk jaringan Base
-const provider = new ethers.providers.JsonRpcProvider(process.env.BASE_RPC_URL || 'https://mainnet.base.org');
-const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
-const contractAddress = '0xddafccf625344039848feffc61939931f17b550a'; // Pastikan ini kontrak di Base
-const contractABI = [
-  "function transferFrom(address from, address to, uint256 tokenId) public",
-  "function balanceOf(address owner) public view returns (uint256)"
-];
-const contract = new ethers.Contract(contractAddress, contractABI, wallet);
+// Log untuk debugging
+console.log('BASE_RPC_URL:', process.env.BASE_RPC_URL);
+console.log('PRIVATE_KEY:', process.env.PRIVATE_KEY ? 'Set' : 'Not set');
+
+let provider, wallet, contract;
+try {
+  provider = new JsonRpcProvider(process.env.BASE_RPC_URL || 'https://mainnet.base.org');
+  wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+  const contractAddress = '0xddafccf625344039848feffc61939931f17b550a'; // Pastikan valid di Base
+  const contractABI = [
+    "function transferFrom(address from, address to, uint256 tokenId) public",
+    "function balanceOf(address owner) public view returns (uint256)"
+  ];
+  contract = new ethers.Contract(contractAddress, contractABI, wallet);
+} catch (error) {
+  console.error('Error initializing Ethereum:', error.message);
+}
 
 const claimedFIDs = new Set();
 
@@ -37,6 +45,19 @@ app.get('/', (req, res) => {
 });
 
 app.post('/claim', async (req, res) => {
+  if (!contract) {
+    const frameHtml = `
+      <html>
+        <head>
+          <meta property="fc:frame" content="vNext" />
+          <meta property="fc:frame:image" content="https://blush-hidden-mongoose-258.mypinata.cloud/ipfs/bafybeif6xkzclyiopunq3y22hcapsu3oupbuzxc2qzejpp6we7iufkpuhq" />
+          <meta property="fc:frame:button:1" content="Failed: Server Error" />
+        </head>
+      </html>
+    `;
+    return res.send(frameHtml);
+  }
+
   const { untrustedData } = req.body;
   const fid = untrustedData?.fid;
 
@@ -69,8 +90,8 @@ app.post('/claim', async (req, res) => {
   }
 
   try {
-    const walletAddress = untrustedData?.address || '0x...'; // Ganti dengan logika untuk wallet
-    const tx = await contract.transferFrom(wallet.address, walletAddress, 1); // Sesuaikan tokenId
+    const walletAddress = untrustedData?.address || '0x...'; // Placeholder
+    const tx = await contract.transferFrom(wallet.address, walletAddress, 1);
     await tx.wait();
 
     claimedFIDs.add(fid);
@@ -86,7 +107,7 @@ app.post('/claim', async (req, res) => {
     res.set('Content-Type', 'text/html');
     res.send(frameHtml);
   } catch (error) {
-    console.error(error);
+    console.error('Claim error:', error.message);
     const frameHtml = `
       <html>
         <head>
